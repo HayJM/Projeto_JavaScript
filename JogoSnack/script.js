@@ -2,9 +2,11 @@
 class GameManager {
   constructor() {
     this.currentUser = null;
-    this.currentLevel = 1; // Nível inicial (velocidade atual)
+    this.currentUserId = null;
+    this.currentLevel = 1;
     this.gameRunning = false;
     this.gamePaused = false;
+    this.gameStartTime = null;
     this.canvas = null;
     this.ctx = null;
     this.grid = 20;
@@ -20,13 +22,25 @@ class GameManager {
     this.initializeScreens();
   }
 
-  initializeScreens() {
-    // Verificar se há usuário logado
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      this.currentUser = JSON.parse(savedUser);
-      this.showMenuScreen();
-    } else {
+  async initializeScreens() {
+    try {
+      // Inicializar banco de dados
+      await dbManager.initialize();
+      
+      // Verificar se há usuário logado
+      const savedUser = localStorage.getItem('currentUser');
+      const savedUserId = localStorage.getItem('currentUserId');
+      
+      if (savedUser && savedUserId) {
+        this.currentUser = JSON.parse(savedUser);
+        this.currentUserId = JSON.parse(savedUserId);
+        this.showMenuScreen();
+      } else {
+        this.showAuthScreen();
+      }
+    } catch (error) {
+      console.error('Erro ao inicializar:', error);
+      alert('Erro ao inicializar o banco de dados. Usando modo offline.');
       this.showAuthScreen();
     }
   }
@@ -41,6 +55,18 @@ class GameManager {
     this.hideAllScreens();
     document.getElementById('menu-screen').classList.remove('hidden');
     this.updateMenuInfo();
+  }
+
+  showStatsScreen() {
+    this.hideAllScreens();
+    document.getElementById('stats-screen').classList.remove('hidden');
+    this.loadUserStats();
+  }
+
+  showRankingScreen() {
+    this.hideAllScreens();
+    document.getElementById('ranking-screen').classList.remove('hidden');
+    this.loadRanking();
   }
 
   showGameScreen() {
@@ -77,36 +103,91 @@ class GameManager {
   }
 
   // Sistema de Usuários
-  getUsers() {
-    return JSON.parse(localStorage.getItem('snakeUsers') || '{}');
+  async updateMenuInfo() {
+    try {
+      if (this.currentUserId) {
+        const userData = await dbManager.getUserStats(this.currentUserId);
+        document.getElementById('welcome-message').textContent = `Bem-vindo, ${this.currentUser}!`;
+        document.getElementById('current-level').textContent = userData.max_level_reached || 1;
+        document.getElementById('best-score').textContent = userData.best_score || 0;
+        document.getElementById('games-completed').textContent = userData.total_games_played || 0;
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados do usuário:', error);
+    }
   }
 
-  saveUsers(users) {
-    localStorage.setItem('snakeUsers', JSON.stringify(users));
+  async loadUserStats() {
+    try {
+      if (this.currentUserId) {
+        const userData = await dbManager.getUserStats(this.currentUserId);
+        const history = await dbManager.getUserGameHistory(this.currentUserId, 10);
+        
+        // Atualizar estatísticas detalhadas
+        document.getElementById('stat-best-score').textContent = userData.best_score || 0;
+        document.getElementById('stat-max-level').textContent = userData.max_level_reached || 1;
+        document.getElementById('stat-total-games').textContent = userData.total_games_played || 0;
+        document.getElementById('stat-total-points').textContent = userData.total_points_scored || 0;
+        
+        // Carregar histórico
+        const historyList = document.getElementById('history-list');
+        historyList.innerHTML = '';
+        
+        if (history.length === 0) {
+          historyList.innerHTML = '<p>Nenhum jogo jogado ainda.</p>';
+        } else {
+          history.forEach(game => {
+            const date = new Date(game.game_date).toLocaleDateString('pt-BR');
+            const time = new Date(game.game_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `
+              <div>
+                <strong>${game.score} pontos</strong> - Nível ${game.max_level_reached}
+              </div>
+              <div style="font-size: 0.8em; color: rgba(255,255,255,0.7);">
+                ${date} ${time}
+              </div>
+            `;
+            historyList.appendChild(item);
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas:', error);
+    }
   }
 
-  updateMenuInfo() {
-    const userData = this.getUserData();
-    document.getElementById('welcome-message').textContent = `Bem-vindo, ${this.currentUser}!`;
-    document.getElementById('current-level').textContent = userData.unlockedLevel || 1;
-    document.getElementById('best-score').textContent = userData.bestScore;
-    document.getElementById('games-completed').textContent = userData.gamesCompleted;
-  }
-
-  getUserData() {
-    const users = this.getUsers();
-    return users[this.currentUser] || {
-      unlockedLevel: 1,
-      bestScore: 0,
-      gamesCompleted: 0,
-      levelScores: {}
-    };
-  }
-
-  saveUserData(userData) {
-    const users = this.getUsers();
-    users[this.currentUser] = userData;
-    this.saveUsers(users);
+  async loadRanking() {
+    try {
+      const topPlayers = await dbManager.getTopPlayers(20);
+      const rankingList = document.getElementById('ranking-list');
+      rankingList.innerHTML = '';
+      
+      if (topPlayers.length === 0) {
+        rankingList.innerHTML = '<p>Nenhum jogador no ranking ainda.</p>';
+      } else {
+        topPlayers.forEach((player, index) => {
+          const item = document.createElement('div');
+          item.className = 'ranking-item';
+          item.innerHTML = `
+            <div class="ranking-position">#${index + 1}</div>
+            <div class="ranking-player">
+              <strong>${player.username}</strong>
+            </div>
+            <div class="ranking-stats">
+              <div>${player.best_score} pontos</div>
+              <div>Nível ${player.max_level_reached}</div>
+              <div>${player.total_games_played} jogos</div>
+            </div>
+          `;
+          rankingList.appendChild(item);
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar ranking:', error);
+    }
   }
 
   // Sistema de Níveis (modo contínuo - não precisa mais de seleção manual)
@@ -170,6 +251,7 @@ class GameManager {
     this.count = 0;
     this.gameRunning = true;
     this.gamePaused = false;
+    this.gameStartTime = Date.now(); // Registrar tempo de início
     
     // Atualizar UI
     document.getElementById('player-name').textContent = this.currentUser;
@@ -296,6 +378,25 @@ class GameManager {
     this.saveGameResult();
     this.showGameOverScreen(false);
   }
+
+  async saveGameResult() {
+    try {
+      if (this.currentUserId) {
+        const playTime = Math.floor((Date.now() - this.gameStartTime) / 1000); // Tempo em segundos
+        const maxLevelReached = Math.min(Math.floor(this.score / 10) + 1, 20);
+        
+        const gameData = {
+          score: this.score,
+          maxLevel: maxLevelReached,
+          playTime: playTime
+        };
+        
+        await dbManager.updateUserStats(this.currentUserId, gameData);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar resultado do jogo:', error);
+    }
+  }
 }
 
 // Instância global do gerenciador de jogo
@@ -312,7 +413,7 @@ function showRegister() {
   document.getElementById('register-form').classList.remove('hidden');
 }
 
-function login() {
+async function login() {
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
 
@@ -321,18 +422,25 @@ function login() {
     return;
   }
 
-  const users = gameManager.getUsers();
-  
-  if (users[username] && users[username].password === password) {
-    gameManager.currentUser = username;
-    localStorage.setItem('currentUser', JSON.stringify(username));
-    gameManager.showMenuScreen();
-  } else {
-    alert('Usuário ou senha incorretos!');
+  try {
+    const result = await dbManager.authenticateUser(username, password);
+    
+    if (result.success) {
+      gameManager.currentUser = result.user.username;
+      gameManager.currentUserId = result.user.id;
+      localStorage.setItem('currentUser', JSON.stringify(result.user.username));
+      localStorage.setItem('currentUserId', JSON.stringify(result.user.id));
+      gameManager.showMenuScreen();
+    } else {
+      alert(result.error);
+    }
+  } catch (error) {
+    console.error('Erro no login:', error);
+    alert('Erro ao fazer login. Tente novamente.');
   }
 }
 
-function register() {
+async function register() {
   const username = document.getElementById('register-username').value.trim();
   const password = document.getElementById('register-password').value;
   const confirmPassword = document.getElementById('register-confirm').value;
@@ -357,35 +465,44 @@ function register() {
     return;
   }
 
-  const users = gameManager.getUsers();
-  
-  if (users[username]) {
-    alert('Este nome de usuário já existe!');
-    return;
+  try {
+    const result = await dbManager.createUser(username, password);
+    
+    if (result.success) {
+      alert('Cadastro realizado com sucesso!');
+      showLogin();
+      // Limpar campos
+      document.getElementById('register-username').value = '';
+      document.getElementById('register-password').value = '';
+      document.getElementById('register-confirm').value = '';
+    } else {
+      alert(result.error);
+    }
+  } catch (error) {
+    console.error('Erro no cadastro:', error);
+    alert('Erro ao fazer cadastro. Tente novamente.');
   }
-
-  users[username] = {
-    password: password,
-    unlockedLevel: 1, // Todos começam no nível 1
-    bestScore: 0,
-    gamesCompleted: 0,
-    levelScores: {}
-  };
-
-  gameManager.saveUsers(users);
-  alert('Cadastro realizado com sucesso!');
-  showLogin();
 }
 
 function logout() {
   gameManager.currentUser = null;
+  gameManager.currentUserId = null;
   localStorage.removeItem('currentUser');
+  localStorage.removeItem('currentUserId');
   gameManager.showAuthScreen();
 }
 
 // Funções do Jogo
 function startGame() {
   gameManager.showGameScreen();
+}
+
+function showStatsScreen() {
+  gameManager.showStatsScreen();
+}
+
+function showRankingScreen() {
+  gameManager.showRankingScreen();
 }
 
 function pauseGame() {

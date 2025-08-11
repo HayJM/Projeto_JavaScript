@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Snake Game Pro 🐍</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://sql.js.org/dist/sql-wasm.js"></script>
+  <script src="database.js"></script>
 </head>
 <body>
   <!-- Tela de Login/Cadastro -->
@@ -53,6 +55,10 @@
       </div>
       
       <button class="play-btn" onclick="startGame()">🚀 Começar Jogo</button>
+      <div class="menu-buttons">
+        <button class="stats-btn" onclick="showStatsScreen()">📊 Estatísticas</button>
+        <button class="ranking-btn" onclick="showRankingScreen()">🏆 Ranking</button>
+      </div>
       <button class="logout-btn" onclick="logout()">Sair</button>
     </div>
   </div>
@@ -93,6 +99,51 @@
         <button onclick="playAgain()">Jogar Novamente</button>
         <button onclick="backToMenu()">Voltar ao Menu</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Tela de Estatísticas -->
+  <div id="stats-screen" class="screen hidden">
+    <div class="stats-container">
+      <h2>📊 Minhas Estatísticas</h2>
+      <div class="detailed-stats">
+        <div class="stat-item">
+          <h3>Melhor Pontuação</h3>
+          <span id="stat-best-score">0</span>
+        </div>
+        <div class="stat-item">
+          <h3>Nível Máximo</h3>
+          <span id="stat-max-level">1</span>
+        </div>
+        <div class="stat-item">
+          <h3>Total de Jogos</h3>
+          <span id="stat-total-games">0</span>
+        </div>
+        <div class="stat-item">
+          <h3>Pontos Totais</h3>
+          <span id="stat-total-points">0</span>
+        </div>
+      </div>
+      
+      <div class="game-history">
+        <h3>🕐 Histórico Recente</h3>
+        <div id="history-list">
+          <!-- Histórico será carregado dinamicamente -->
+        </div>
+      </div>
+      
+      <button onclick="backToMenu()">Voltar ao Menu</button>
+    </div>
+  </div>
+
+  <!-- Tela de Ranking -->
+  <div id="ranking-screen" class="screen hidden">
+    <div class="ranking-container">
+      <h2>🏆 Ranking Global</h2>
+      <div class="ranking-list" id="ranking-list">
+        <!-- Ranking será carregado dinamicamente -->
+      </div>
+      <button onclick="backToMenu()">Voltar ao Menu</button>
     </div>
   </div>
 
